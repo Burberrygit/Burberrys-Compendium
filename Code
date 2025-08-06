@@ -1,0 +1,140 @@
+import json
+import tkinter as tk
+from tkinter import ttk
+import os
+import sys
+
+def resource_path(relative_path):
+    """Return absolute path to resource (handles PyInstaller packaging)."""
+    try:
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
+
+def load_prices():
+    """Load item prices from JSON file."""
+    try:
+        with open(resource_path("prices.json"), "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"Error loading prices.json: {e}")
+        return {}
+
+def filter_items():
+    """Filter items based on name, type, and price range."""
+    name_query = name_var.get().strip().lower()
+    type_query = type_var.get().strip().lower()
+    try:
+        min_price = float(min_price_var.get()) if min_price_var.get() else None
+    except ValueError:
+        min_price = None
+    try:
+        max_price = float(max_price_var.get()) if max_price_var.get() else None
+    except ValueError:
+        max_price = None
+
+    filtered = []
+    for item_name, price in prices.items():
+        item_type = "misc"
+        if isinstance(price, dict):
+            item_price = price.get("cost", 0)
+            item_type = price.get("type", "misc")
+        else:
+            item_price = price
+
+        if name_query and name_query not in item_name.lower():
+            continue
+        if type_query and type_query not in item_type.lower():
+            continue
+        if min_price is not None and item_price < min_price:
+            continue
+        if max_price is not None and item_price > max_price:
+            continue
+
+        filtered.append((item_name, item_type, item_price))
+
+    update_table(filtered)
+
+def update_table(items):
+    """Update the displayed table with filtered items."""
+    for row in tree.get_children():
+        tree.delete(row)
+    sorted_items = sorted(items, key=lambda x: x[sort_column], reverse=not sort_ascending[0])
+    for name, item_type, price in sorted_items:
+        tree.insert("", "end", values=(name, item_type, f"{price} gp"))
+
+def on_column_click(col_name):
+    """Sort table based on selected column."""
+    global sort_column
+    col_index = {"Name": 0, "Type": 1, "Price": 2}[col_name]
+    sort_column = col_index
+    sort_ascending[0] = not sort_ascending[0]
+    filter_items()
+
+# GUI Initialization
+root = tk.Tk()
+root.title("Burberry's Compendium")
+root.geometry("1000x600")
+root.configure(bg="#2e2e2e")
+
+style = ttk.Style()
+style.theme_use("default")
+style.configure("Treeview", background="#2e2e2e", foreground="white", fieldbackground="#2e2e2e", font=('Arial', 11))
+style.configure("Treeview.Heading", font=('Arial', 12, 'bold'), background="#1e1e1e", foreground="white")
+
+# Search Bar
+search_frame = tk.Frame(root, bg="#2e2e2e")
+search_frame.grid(row=0, column=0, sticky="ew", padx=10, pady=10)
+root.grid_columnconfigure(0, weight=1)
+
+name_var = tk.StringVar()
+type_var = tk.StringVar()
+min_price_var = tk.StringVar()
+max_price_var = tk.StringVar()
+
+tk.Label(search_frame, text="Name:", fg="white", bg="#2e2e2e").grid(row=0, column=0, sticky="w", padx=5)
+tk.Entry(search_frame, textvariable=name_var).grid(row=0, column=1, padx=5, sticky="ew")
+
+tk.Label(search_frame, text="Type:", fg="white", bg="#2e2e2e").grid(row=0, column=2, sticky="w", padx=5)
+tk.Entry(search_frame, textvariable=type_var).grid(row=0, column=3, padx=5, sticky="ew")
+
+tk.Label(search_frame, text="Min Price:", fg="white", bg="#2e2e2e").grid(row=0, column=4, sticky="w", padx=5)
+tk.Entry(search_frame, textvariable=min_price_var).grid(row=0, column=5, padx=5, sticky="ew")
+
+tk.Label(search_frame, text="Max Price:", fg="white", bg="#2e2e2e").grid(row=0, column=6, sticky="w", padx=5)
+tk.Entry(search_frame, textvariable=max_price_var).grid(row=0, column=7, padx=5, sticky="ew")
+
+search_button = tk.Button(search_frame, text="Search", command=filter_items)
+search_button.grid(row=0, column=8, padx=10)
+
+root.bind("<Return>", lambda event: filter_items())
+
+for i in range(1, 8):
+    search_frame.grid_columnconfigure(i, weight=1)
+
+# Item Table
+tree = ttk.Treeview(root, columns=("Name", "Type", "Price"), show="headings")
+tree.heading("Name", text="Name", command=lambda: on_column_click("Name"))
+tree.heading("Type", text="Type", command=lambda: on_column_click("Type"))
+tree.heading("Price", text="Price", command=lambda: on_column_click("Price"))
+tree.column("Name", anchor="w", width=250)
+tree.column("Type", anchor="center", width=150)
+tree.column("Price", anchor="e", width=100)
+tree.grid(row=1, column=0, sticky="nsew", padx=10, pady=10)
+
+root.grid_rowconfigure(1, weight=1)
+root.grid_columnconfigure(0, weight=1)
+
+# Scrollbar
+scrollbar = ttk.Scrollbar(root, orient="vertical", command=tree.yview)
+tree.configure(yscroll=scrollbar.set)
+scrollbar.grid(row=1, column=1, sticky="ns")
+
+# State
+sort_column = 0
+sort_ascending = [True]
+prices = load_prices()
+
+filter_items()
+root.mainloop()
